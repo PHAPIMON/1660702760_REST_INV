@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- ฟอนต์น่ารัก -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+        }
+    </style>
+</head>
+
+<body class="bg-pink-50 min-h-screen p-4 md:p-10 text-gray-700">
+
+<div class="max-w-4xl mx-auto">
+
+    <!-- HEADER -->
+    <h1 class="text-3xl font-semibold text-pink-500 mb-8 flex items-center gap-2">
+        🧸 RESTInv
+    </h1>
+
+    <!-- ADD PRODUCT -->
+    <div class="bg-white/80 backdrop-blur p-6 rounded-2xl shadow-sm border border-pink-100 mb-10">
+        <h2 class="text-lg font-medium mb-4 text-pink-400">เพิ่มสินค้าใหม่</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <input id="name" type="text" placeholder="ชื่อสินค้า"
+                class="border border-pink-200 p-2 rounded-xl focus:ring-2 focus:ring-pink-300 outline-none">
+
+            <input id="sku" type="text" placeholder="SKU"
+                class="border border-pink-200 p-2 rounded-xl focus:ring-2 focus:ring-pink-300 outline-none">
+
+            <input id="zone" type="text" placeholder="โซน (A1, B1)"
+                class="border border-pink-200 p-2 rounded-xl focus:ring-2 focus:ring-pink-300 outline-none">
+
+            <button onclick="addProduct()"
+                class="bg-pink-400 text-white font-medium py-2 rounded-xl hover:bg-pink-500 transition">
+                + เพิ่มสินค้า
+            </button>
+        </div>
+    </div>
+
+    <!-- FILTER -->
+    <div class="mb-4 flex justify-end">
+        <label class="flex items-center gap-2 cursor-pointer text-sm text-pink-400">
+            <input type="checkbox" id="lowStockToggle" onchange="loadInventory()"
+                class="w-4 h-4 accent-pink-400">
+            ใกล้หมด (≤ 10)
+        </label>
+    </div>
+
+    <!-- TABLE -->
+    <div class="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-pink-100 overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-pink-100 text-pink-500 text-sm">
+                <tr>
+                    <th class="p-4 text-left font-medium">สินค้า</th>
+                    <th class="p-4 text-center font-medium">สต็อก</th>
+                    <th class="p-4 text-center font-medium">โซน</th>
+                    <th class="p-4 text-right font-medium">จัดการ</th>
+                </tr>
+            </thead>
+
+            <tbody id="inventory-list" class="divide-y divide-pink-50"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+async function loadInventory() {
+    const lowStock = document.getElementById('lowStockToggle').checked;
+    const res = await fetch(`/api/inventory${lowStock ? '?low_stock=true' : ''}`);
+    const data = await res.json();
+
+    const list = document.getElementById('inventory-list');
+
+    list.innerHTML = data.map(item => `
+        <tr class="hover:bg-pink-50 transition">
+            <td class="p-4">
+                <div class="font-medium text-gray-800">${item.name}</div>
+                <div class="text-xs text-gray-400">${item.sku}</div>
+            </td>
+
+            <td class="p-4 text-center">
+                <div class="flex items-center justify-center gap-3">
+
+                    <button onclick="adjust('${item.id}', -1)"
+                        class="w-8 h-8 flex items-center justify-center bg-pink-100 text-pink-500 rounded-full hover:bg-pink-200">
+                        -
+                    </button>
+
+                    <span class="text-lg font-bold text-pink-500 w-8">${item.quantity}</span>
+
+                    <button onclick="adjust('${item.id}', 1)"
+                        class="w-8 h-8 flex items-center justify-center bg-green-100 text-green-500 rounded-full hover:bg-green-200">
+                        +
+                    </button>
+
+                </div>
+            </td>
+
+            <td class="p-4 text-center">
+                <span class="bg-pink-100 px-3 py-1 rounded-full text-xs text-pink-500">
+                    ${item.zone}
+                </span>
+            </td>
+
+            <td class="p-4 text-right">
+                <button onclick="deleteProduct('${item.id}')"
+                    class="text-gray-300 hover:text-pink-500 text-sm">
+                    ลบ
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function addProduct() {
+    const body = {
+        name: document.getElementById('name').value,
+        sku: document.getElementById('sku').value,
+        zone: document.getElementById('zone').value
+    };
+
+    const res = await fetch('/api/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    if (res.ok) {
+        document.getElementById('name').value = '';
+        document.getElementById('sku').value = '';
+        document.getElementById('zone').value = '';
+        loadInventory();
+    } else {
+        const err = await res.json();
+        alert(err.error);
+    }
+}
+
+async function adjust(id, change) {
+    const res = await fetch(`/api/inventory/${id}/adjust`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ change })
+    });
+
+    if (!res.ok) {
+        const err = await res.json();
+        alert(err.error);
+    }
+
+    loadInventory();
+}
+
+async function deleteProduct(id) {
+    if (!confirm('ต้องการลบใช่หรือไม่')) return;
+
+    const res = await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+
+    if (!res.ok) {
+        const err = await res.json();
+        alert(err.error);
+    }
+
+    loadInventory();
+}
+
+loadInventory();
+</script>
+
+</body>
+</html>
